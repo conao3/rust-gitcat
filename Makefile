@@ -4,7 +4,7 @@ build:
 
 .PHONY: run
 run:
-	cargo run
+	cargo run -- repository preview-repository --output text
 
 .PHONY: check
 check:
