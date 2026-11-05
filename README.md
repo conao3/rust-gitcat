@@ -94,9 +94,7 @@ gitcat repository preview-repository --repository-path ~/src/my-project --output
 Common to every subcommand:
 
 - A value starting with `file://` is replaced by the content of that file. Read stdin with `file:///dev/stdin`.
-- `--cli-input-json file://input.json` passes all parameters as a JSON object keyed by the PascalCase parameter names (`RepositoryPath`, `Readme`). Parameters given on the command line take precedence.
-- `--generate-cli-skeleton input|output` prints the input or output skeleton.
-- Global options: `--output json|text|table` (default `json`; `text` prints the tree), `--query <JMESPath>`, `--debug`, `--version`.
+- Global options: `--output json|text|table` (default `json`; `text` prints the tree), `--debug`, `--version`.
 - `help` works at every level: `gitcat help`, `gitcat repository help`, `gitcat repository preview-repository help`.
 - Exit codes: `0` success, `252` syntax or parameter error, `254` the path is not inside a git repository or git failed on it, `255` other failures.
 

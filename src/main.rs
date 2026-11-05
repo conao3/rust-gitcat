@@ -12,8 +12,7 @@ use colored::Colorize;
 use serde::Serialize;
 use serde_json::Value;
 
-use error::{Result, other, parameter, target};
-use grammar::{CliInputArgs, SkeletonKind};
+use error::{Result, other, target};
 use output::{OutputFormat, Response};
 
 #[derive(Parser)]
@@ -26,14 +25,6 @@ struct Cli {
     /// Output format (text prints the GitHub-style tree)
     #[arg(long, global = true, help_heading = "Global Options", value_enum, default_value_t = OutputFormat::Json)]
     output: OutputFormat,
-    /// JMESPath expression applied to the output
-    #[arg(
-        long,
-        global = true,
-        help_heading = "Global Options",
-        value_name = "JMESPATH"
-    )]
-    query: Option<String>,
     /// Print debug logs to stderr
     #[arg(long, global = true, help_heading = "Global Options")]
     debug: bool,
@@ -66,11 +57,9 @@ struct PreviewRepositoryArgs {
     /// Leave out README.md (default)
     #[arg(long, action = ArgAction::SetTrue, overrides_with = "readme")]
     no_readme: bool,
-    #[command(flatten)]
-    input: CliInputArgs,
 }
 
-#[derive(Serialize, Default)]
+#[derive(Serialize)]
 #[serde(rename_all = "PascalCase")]
 struct PreviewRepositoryReport {
     repository_name: String,
@@ -79,16 +68,6 @@ struct PreviewRepositoryReport {
     untracked_file_count: usize,
     ignored_file_count: usize,
     readme: Option<String>,
-}
-
-impl PreviewRepositoryReport {
-    fn skeleton() -> Self {
-        Self {
-            tracked_files: vec![String::new()],
-            readme: Some(String::new()),
-            ..Self::default()
-        }
-    }
 }
 
 enum TreeEntry {
@@ -277,48 +256,16 @@ fn to_value<T: Serialize>(value: &T) -> Result<Value> {
     serde_json::to_value(value).map_err(|error| other(error.to_string()))
 }
 
-fn output_skeleton(path: &[String]) -> Result<Value> {
-    match path.last().map(String::as_str) {
-        Some("preview-repository") => to_value(&PreviewRepositoryReport::skeleton()),
-        _ => Err(parameter(
-            "--generate-cli-skeleton needs a command and a subcommand",
-        )),
-    }
-}
-
 fn run() -> Result<()> {
     let mut root = Cli::command();
     root.build();
-    let prepared = grammar::prepare(&root, std::env::args_os().collect())?;
-    let debug = prepared.argv.iter().any(|token| token == "--debug");
+    let argv = grammar::prepare(&root, std::env::args_os().collect())?;
+    let debug = argv.iter().any(|token| token == "--debug");
     if debug {
-        eprintln!("debug: argv {:?}", &prepared.argv[1..]);
+        eprintln!("debug: argv {:?}", &argv[1..]);
     }
 
-    if let Some(kind) = prepared.skeleton {
-        let mut command = &root;
-        for name in &prepared.path {
-            command = command
-                .find_subcommand(name)
-                .ok_or_else(|| other(format!("unknown subcommand {name}")))?;
-        }
-        if command.has_subcommands() {
-            return Err(parameter(
-                "--generate-cli-skeleton needs a command and a subcommand",
-            ));
-        }
-        let value = match kind {
-            SkeletonKind::Input => grammar::input_skeleton(command),
-            SkeletonKind::Output => output_skeleton(&prepared.path)?,
-        };
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&value).map_err(|error| other(error.to_string()))?
-        );
-        return Ok(());
-    }
-
-    let cli = match Cli::try_parse_from(&prepared.argv) {
+    let cli = match Cli::try_parse_from(&argv) {
         Ok(cli) => cli,
         Err(error) => {
             let code = if error.use_stderr() { 252 } else { 0 };
@@ -327,9 +274,6 @@ fn run() -> Result<()> {
         }
     };
 
-    if let Some(query) = &cli.query {
-        output::compile_query(query)?;
-    }
     let Command::Repository(RepositoryCommand::Preview(args)) = cli.command;
     let readme = args.readme && !args.no_readme;
     let report = preview(&args.repository_path, readme)?;
@@ -342,8 +286,7 @@ fn run() -> Result<()> {
                 value: to_value(&report)?,
                 text: Some(text),
             },
-            cli.output,
-            cli.query.as_deref()
+            cli.output
         )?
     );
     Ok(())
